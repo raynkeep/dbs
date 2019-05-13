@@ -11,7 +11,7 @@ import (
 )
 
 type User struct {
-	Uid        int64  `db:"-uid"`
+	Uid        int64  `db:"uid,auto_increment"`
 	Gid        int64  `db:"gid"`
 	Name       string `db:"name"`
 	CreateDate string `db:"createDate"`
@@ -28,7 +28,7 @@ func main() {
 	dbs.ErrorLogFile = "./db.error.log"
 
 	// 打开数据库
-	db, err = dbs.Open("./test.db")
+	db, err = dbs.Open("sqlite3", "./test.db")
 	if err != nil {
 		panic(err)
 	}
@@ -46,6 +46,11 @@ CREATE TABLE user
 	if err != nil {
 		panic(err)
 	}
+
+	// 参数设置
+	db.SetMaxIdleConns(50)
+	db.SetMaxOpenConns(2000)
+	db.SetConnMaxLifetime(time.Second * 5)
 
 	// 插入
 	for i := 1; i <= 5; i++ {
@@ -82,6 +87,7 @@ CREATE TABLE user
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println()
 	fmt.Println("Update:", n)
 
 	// 统计数量
@@ -89,6 +95,7 @@ CREATE TABLE user
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println()
 	fmt.Println("Count:", n)
 
 	// ===========================================================================
@@ -107,7 +114,7 @@ CREATE TABLE user
 	}
 	data, fields, scanArr := scanF()
 
-	// 读取(到结构体)
+	// 读取一条 到 结构体
 	err = db.Table("user").Fields(fields).Find(dbs.S{
 		{"uid", "=", 1},
 	}).One(*scanArr)
@@ -115,21 +122,10 @@ CREATE TABLE user
 		panic(err)
 	}
 	u := *data
+	fmt.Println()
 	fmt.Printf("Read: %+v\n", u)
 
-	// 读取(到 Map)
-	rowMap, columns, err := db.Table("user").Find(dbs.S{
-		{"uid", "=", 1},
-	}).OneMap()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("row Map:", rowMap)
-	bRowMap, _ := json.Marshal(rowMap)
-	fmt.Println("Json Map:", string(bRowMap))
-	fmt.Println("columns:", columns)
-
-	// 读取多条(到结构体)
+	// 读取多条 到 结构体
 	var list []User
 	err = db.Table("user").Fields(fields).Sort([]string{"-gid", "-uid"}).Skip(2).Limit(2).Find(dbs.S{
 		{"uid", "<", 5},
@@ -139,20 +135,35 @@ CREATE TABLE user
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println()
 	fmt.Println("List:", list)
-	b, _ := json.Marshal(list)
-	fmt.Println("Json:", string(b))
+	listByte, _ := json.Marshal(list)
+	fmt.Println("Json:", string(listByte))
 
-	// 读取多条(到 Map)
+	// 读取一条 到 Map
+	rowMap, columns, err := db.Table("user").Find(dbs.S{
+		{"uid", "=", 1},
+	}).OneMap()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println()
+	fmt.Println("row Map:", rowMap)
+	rowMapByte, _ := json.Marshal(rowMap)
+	fmt.Println("Json Map:", string(rowMapByte))
+	fmt.Println("columns:", columns)
+
+	// 读取多条 到 Map
 	listMap, columns, err := db.Table("user").Find(dbs.S{
 		{"uid", "<", 5},
 	}).AllMap()
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println()
 	fmt.Println("List Map:", listMap)
-	bMap, _ := json.Marshal(listMap)
-	fmt.Println("Json Map:", string(bMap))
+	listMapByte, _ := json.Marshal(listMap)
+	fmt.Println("Json Map:", string(listMapByte))
 	fmt.Println("columns:", columns)
 
 	// 删除
@@ -162,5 +173,6 @@ CREATE TABLE user
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println()
 	fmt.Println("Delete:", n)
 }

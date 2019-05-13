@@ -42,8 +42,8 @@ type DocElem struct {
 	Value interface{}
 }
 
-func Open(dataSourceName string) (*DB, error) {
-	db, err := sql.Open("sqlite3", dataSourceName)
+func Open(driverName, dataSourceName string) (*DB, error) {
+	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
 	}
@@ -436,9 +436,12 @@ func S2D(t interface{}) (d []DocElem) {
 	for i := 0; i < st.NumField(); i++ {
 		f := st.Field(i)
 		if field := f.Tag.Get("db"); field != "" {
-			symbol := field[0:1]
-			if symbol != "-" {
-				// fmt.Println(sv.Field(i).UnsafeAddr())
+			if strings.Contains(field, ",") {
+				arr := strings.Split(field, ",")
+				if arr[1] != "auto_increment" {
+					d = append(d, DocElem{arr[0], sv.Field(i).Interface()})
+				}
+			} else {
 				d = append(d, DocElem{field, sv.Field(i).Interface()})
 			}
 		}
