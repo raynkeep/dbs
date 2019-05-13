@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -14,7 +15,10 @@ import (
 
 type DB struct {
 	*sql.DB
-	dbName   string
+}
+
+type Query struct {
+	*DB
 	table    string
 	fields   []string
 	selector []Selector
@@ -46,49 +50,47 @@ func Open(dataSourceName string) (*DB, error) {
 	LogInit()
 	return &DB{DB: db}, err
 }
-
-func (db *DB) D(dbName string) *DB {
-	db.dbName = dbName
-	return db
+func (db *DB) Table(name string) *Query {
+	return &Query{DB: db, table: name}
 }
 
-func (db *DB) Table(name string) *DB {
-	db.table = name
-	return db
+func (q *Query) Fields(fields []string) *Query {
+	q.fields = fields
+	return q
 }
 
-func (db *DB) Fields(fields []string) *DB {
-	db.fields = fields
-	return db
+func (q *Query) Find(selector S) *Query {
+	q.selector = selector
+	return q
 }
 
-func (db *DB) Find(selector S) *DB {
-	db.selector = selector
-	return db
+func (q *Query) Sort(orderBy []string) *Query {
+	q.orderBy = orderBy
+	return q
 }
 
-func (db *DB) Sort(orderBy []string) *DB {
-	db.orderBy = orderBy
-	return db
+func (q *Query) Limit(limit int64) *Query {
+	q.limit = limit
+	return q
 }
 
-func (db *DB) Limit(limit int64) *DB {
-	db.limit = limit
-	return db
+func (q *Query) Skip(skip int64) *Query {
+	q.skip = skip
+	return q
 }
 
-func (db *DB) Skip(skip int64) *DB {
-	db.skip = skip
-	return db
+func (q *Query) InsertS(st interface{}) (id int64, err error) {
+	id, err = q.Insert(S2D(st))
+	return
 }
 
-func (db *DB) Insert(data D) (id int64, err error) {
+func (q *Query) Insert(data D) (id int64, err error) {
 	kStr, vStr, args := GetSqlInsert(data)
-	s := "INSERT INTO `" + db.table + "`(" + kStr + ") VALUES (" + vStr + ")"
+	s := "INSERT INTO `" + q.table + "`(" + kStr + ") VALUES (" + vStr + ")"
 	LogWrite(s, args...)
 
 	var stmt *sql.Stmt
-	stmt, err = db.Prepare(s)
+	stmt, err = q.Prepare(s)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -110,16 +112,16 @@ func (db *DB) Insert(data D) (id int64, err error) {
 	return
 }
 
-func (db *DB) Update(data D, where S) (n int64, err error) {
+func (q *Query) Update(data D, where S) (n int64, err error) {
 	setStr, args := GetSqlUpdate(data)
 	whereStr, args2 := GetSqlWhere(where)
 	args = append(args, args2...)
 
-	s := "UPDATE `" + db.table + "` SET " + setStr + whereStr
+	s := "UPDATE `" + q.table + "` SET " + setStr + whereStr
 	LogWrite(s, args...)
 
 	var stmt *sql.Stmt
-	stmt, err = db.Prepare(s)
+	stmt, err = q.Prepare(s)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -137,13 +139,13 @@ func (db *DB) Update(data D, where S) (n int64, err error) {
 	return
 }
 
-func (db *DB) Delete(where S) (n int64, err error) {
+func (q *Query) Delete(where S) (n int64, err error) {
 	whereStr, args := GetSqlWhere(where)
-	s := "DELETE FROM `" + db.table + "`" + whereStr
+	s := "DELETE FROM `" + q.table + "`" + whereStr
 	LogWrite(s, args...)
 
 	var stmt *sql.Stmt
-	stmt, err = db.Prepare(s)
+	stmt, err = q.Prepare(s)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -165,13 +167,13 @@ func (db *DB) Delete(where S) (n int64, err error) {
 	return
 }
 
-func (db *DB) Count(where S) (n int64, err error) {
+func (q *Query) Count(where S) (n int64, err error) {
 	whereStr, args := GetSqlWhere(where)
-	s := "SELECT COUNT(*) FROM `" + db.table + "`" + whereStr
+	s := "SELECT COUNT(*) FROM `" + q.table + "`" + whereStr
 	LogWrite(s, args...)
 
 	var stmt *sql.Stmt
-	stmt, err = db.Prepare(s)
+	stmt, err = q.Prepare(s)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -186,14 +188,14 @@ func (db *DB) Count(where S) (n int64, err error) {
 	return
 }
 
-func (db *DB) One(scanArr []interface{}) (err error) {
-	fields := GetSqlFields(db.fields)
-	whereStr, args := GetSqlWhere(db.selector)
-	s := "SELECT " + fields + " FROM `" + db.table + "`" + whereStr + " LIMIT 1"
+func (q *Query) One(scanArr []interface{}) (err error) {
+	fields := GetSqlFields(q.fields)
+	whereStr, args := GetSqlWhere(q.selector)
+	s := "SELECT " + fields + " FROM `" + q.table + "`" + whereStr + " LIMIT 1"
 	LogWrite(s, args...)
 
 	var stmt *sql.Stmt
-	stmt, err = db.Prepare(s)
+	stmt, err = q.Prepare(s)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -210,16 +212,16 @@ func (db *DB) One(scanArr []interface{}) (err error) {
 	return
 }
 
-func (db *DB) All(scanArr []interface{}, callback func()) (err error) {
-	fields := GetSqlFields(db.fields)
-	whereStr, args := GetSqlWhere(db.selector)
-	orderStr := GetSqlOrderBy(db.orderBy)
-	limitStr := GetSqlLimit(db.skip, db.limit)
-	s := "SELECT " + fields + " FROM `" + db.table + "`" + whereStr + orderStr + limitStr
+func (q *Query) All(scanArr []interface{}, callback func()) (err error) {
+	fields := GetSqlFields(q.fields)
+	whereStr, args := GetSqlWhere(q.selector)
+	orderStr := GetSqlOrderBy(q.orderBy)
+	limitStr := GetSqlLimit(q.skip, q.limit)
+	s := "SELECT " + fields + " FROM `" + q.table + "`" + whereStr + orderStr + limitStr
 	LogWrite(s, args...)
 
 	var rows *sql.Rows
-	rows, err = db.Query(s, args...)
+	rows, err = q.Query(s, args...)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -236,14 +238,14 @@ func (db *DB) All(scanArr []interface{}, callback func()) (err error) {
 	return
 }
 
-func (db *DB) OneMap() (row map[string]interface{}, columns []string, err error) {
-	whereStr, args := GetSqlWhere(db.selector)
-	fields := GetSqlFields(db.fields)
-	s := "SELECT " + fields + " FROM `" + db.table + "`" + whereStr
+func (q *Query) OneMap() (row map[string]interface{}, columns []string, err error) {
+	whereStr, args := GetSqlWhere(q.selector)
+	fields := GetSqlFields(q.fields)
+	s := "SELECT " + fields + " FROM `" + q.table + "`" + whereStr
 	LogWrite(s, args...)
 
 	var rows *sql.Rows
-	rows, err = db.Query(s, args...)
+	rows, err = q.Query(s, args...)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -262,16 +264,16 @@ func (db *DB) OneMap() (row map[string]interface{}, columns []string, err error)
 	return
 }
 
-func (db *DB) AllMap() (list []map[string]interface{}, columns []string, err error) {
-	fields := GetSqlFields(db.fields)
-	whereStr, args := GetSqlWhere(db.selector)
-	orderStr := GetSqlOrderBy(db.orderBy)
-	limitStr := GetSqlLimit(db.skip, db.limit)
-	s := "SELECT " + fields + " FROM `" + db.table + "`" + whereStr + orderStr + limitStr
+func (q *Query) AllMap() (list []map[string]interface{}, columns []string, err error) {
+	fields := GetSqlFields(q.fields)
+	whereStr, args := GetSqlWhere(q.selector)
+	orderStr := GetSqlOrderBy(q.orderBy)
+	limitStr := GetSqlLimit(q.skip, q.limit)
+	s := "SELECT " + fields + " FROM `" + q.table + "`" + whereStr + orderStr + limitStr
 	LogWrite(s, args...)
 
 	var rows *sql.Rows
-	rows, err = db.Query(s, args...)
+	rows, err = q.Query(s, args...)
 	if err != nil {
 		ErrorLogWrite(err, s, args...)
 		return
@@ -425,6 +427,22 @@ func GetSqlWhere(selector S) (whereStr string, args []interface{}) {
 		}
 	}
 	whereStr = strings.TrimSuffix(whereStr, " AND ")
+	return
+}
+
+func S2D(t interface{}) (d []DocElem) {
+	st := reflect.TypeOf(t)
+	sv := reflect.ValueOf(t)
+	for i := 0; i < st.NumField(); i++ {
+		f := st.Field(i)
+		if field := f.Tag.Get("db"); field != "" {
+			symbol := field[0:1]
+			if symbol != "-" {
+				// fmt.Println(sv.Field(i).UnsafeAddr())
+				d = append(d, DocElem{field, sv.Field(i).Interface()})
+			}
+		}
+	}
 	return
 }
 

@@ -11,10 +11,10 @@ import (
 )
 
 type User struct {
-	Uid        int64
-	Gid        int64
-	Name       string
-	CreateDate string
+	Uid        int64  `db:"-uid"`
+	Gid        int64  `db:"gid"`
+	Name       string `db:"name"`
+	CreateDate string `db:"createDate"`
 }
 
 var err error
@@ -48,12 +48,24 @@ CREATE TABLE user
 	}
 
 	// 插入
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 5; i++ {
 		uid, err := db.Table("user").Insert(dbs.D{
 			{"gid", 1},
 			{"name", "admin" + strconv.Itoa(i)},
 			{"createDate", time.Now().Format("2006-01-02 15:04:05")},
 		})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Insert:", uid)
+	}
+
+	for i := 1; i <= 5; i++ {
+		st := User{}
+		st.Gid = 3
+		st.Name = "twoTest" + strconv.Itoa(i)
+		st.CreateDate = time.Now().Format("2006-01-02 15:04:05")
+		uid, err := db.Table("user").InsertS(st)
 		if err != nil {
 			panic(err)
 		}
