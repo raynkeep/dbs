@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"../../dbs"
+	"github.com/ryanker/dbs"
 )
 
 type User struct {
