@@ -1,4 +1,4 @@
-module github.com/ryanker/dbs
+module github.com/ryankeep/dbs
 
 go 1.12
 
